@@ -1,0 +1,50 @@
+version: '3.8'
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: postgresql
+    hostname: affarm
+    restart: unless-stopped
+    ports:
+      - "${PG_PORT}:5432" # Маппинг порта для доступа извне
+    environment:
+      - POSTGRES_DB=${PG_DBNAME}
+      - POSTGRES_USER=${PG_USER}
+      - POSTGRES_PASSWORD=${PG_PASS}
+    volumes:
+      - postgres_data:/var/lib/postgresql/data # Создаем том для хранения данных, чтобы они не потерялись при перезапуске контейнера
+    networks:
+      - service-net
+    # хелф-чек проверяет включенность базы данных
+    healthcheck:
+      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  pricecheck:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    ports:
+      - "8080:8080" # anyway
+    environment:
+      - PG_HOST=db
+      - PG_DBNAME=${PG_DBNAME}
+      - PG_USER=${PG_USER}
+      - PG_PASS=${PG_PASS}
+      - PG_PORT=${PG_PORT}
+    depends_on:
+      db:
+        condition: service_healthy  # Ждем, пока PostgreSQL не станет healthy
+    restart: on-failure # перезапуск при ошибке
+    networks:
+      - service-net
+
+volumes:
+  postgres_data:
+
+networks:
+  service-net:
+    driver: bridge
