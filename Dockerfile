@@ -29,6 +29,8 @@ WORKDIR /app
 
 # Copy the binary from the builder stage
 COPY --from=builder /app/pricecheck /app/pricecheck
+# Copy config
+COPY --from=builder /app/config.yml .
 
 # Expose the ports
 EXPOSE 8080

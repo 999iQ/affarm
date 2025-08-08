@@ -10,7 +10,10 @@ import (
 )
 
 func main() {
-	cfg, _ := config.Load("config.yml")
+	cfg, err := config.Load("config.yml")
+	if err != nil {
+		log.Fatal(err)
+	}
 	// Подключение к БД
 	db, err := database.GetGormDB()
 	if err != nil {
@@ -19,18 +22,6 @@ func main() {
 
 	// Инициализация роутера
 	r := handlers.NewRouter(db)
-
-	// 2. Явная проверка соединения
-	sqlDB, err := db.DB()
-	if err != nil {
-		log.Fatalf("🔌 Failed to get SQL DB: %v", err)
-	}
-
-	if err := sqlDB.Ping(); err != nil {
-		log.Fatalf("💥 Database ping failed: %v", err)
-	}
-
-	log.Println("✅ Database connection established")
 
 	// Создаем чекер цен с заданным интервалом
 	priceUpdater := services.NewPriceUpdater(db, cfg)

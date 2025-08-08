@@ -6,6 +6,7 @@ import (
 	"github.com/joho/godotenv"
 	"gorm.io/driver/postgres"
 	"gorm.io/gorm"
+	"gorm.io/gorm/logger"
 	"log"
 	"os"
 	"strconv"
@@ -41,7 +42,8 @@ func GetGormDB() (*gorm.DB, error) {
 	)
 
 	db, err := gorm.Open(postgres.Open(dsn), &gorm.Config{
-		//Logger: logger.Default.LogMode(logger.Info), // Настройка логгирования
+		Logger: logger.Default.LogMode(logger.Silent),
+		//Logger: logger.Default.LogMode(logger.Info), // полное логирование запросов
 	})
 	if err != nil {
 		return nil, fmt.Errorf("ошибка подключения к бд: %w", err)
@@ -59,7 +61,7 @@ func GetGormDB() (*gorm.DB, error) {
 	// Настройка пула соединений
 	sqlDB, err := db.DB()
 	if err != nil {
-		return nil, fmt.Errorf("ошибка получения объекта бд: %w", err)
+		return nil, fmt.Errorf("ошибка при проверке подключения к бд: %w", err)
 	}
 
 	sqlDB.SetMaxOpenConns(20) // макс соединений открытых одновременно

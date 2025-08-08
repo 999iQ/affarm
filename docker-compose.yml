@@ -18,7 +18,7 @@ services:
       - service-net
     # хелф-чек проверяет включенность базы данных
     healthcheck:
-      test: [ "CMD-SHELL", "pg_isready -U postgres" ]
+      test: [ "CMD-SHELL", "pg_isready -U postgres -d ${PG_DBNAME}" ]
       interval: 5s
       timeout: 5s
       retries: 5
@@ -29,6 +29,8 @@ services:
       dockerfile: Dockerfile
     ports:
       - "8080:8080" # anyway
+    volumes:
+      - .env:/app/.env  # монтируем .env файл
     environment:
       - PG_HOST=db
       - PG_DBNAME=${PG_DBNAME}
@@ -38,7 +40,7 @@ services:
     depends_on:
       db:
         condition: service_healthy  # Ждем, пока PostgreSQL не станет healthy
-    restart: on-failure # перезапуск при ошибке
+#    restart: on-failure # перезапуск при ошибке
     networks:
       - service-net
 

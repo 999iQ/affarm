@@ -24,6 +24,10 @@ func NewPriceUpdater(db *gorm.DB, cfg *config.BinanceConfig) *PriceUpdater {
 	if db == nil {
 		log.Panic("ошибка, подключение к базе не существует")
 	}
+	if cfg == nil {
+		log.Panic("ошибка, конфиг отсутствует")
+	}
+
 	return &PriceUpdater{
 		db:           db,
 		interval:     time.Duration(cfg.TimeoutSec) * time.Second,
