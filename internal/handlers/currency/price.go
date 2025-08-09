@@ -1,7 +1,7 @@
 package currency
 
 import (
-	"affarm/internal/models"
+	"database/sql"
 	"encoding/json"
 	"log"
 	"net/http"
@@ -31,78 +31,127 @@ type PriceResponse struct {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /price/get [post]
+// @Router /price/get [get]
 func (h *CurrencyHandler) GetPriceAtTime(w http.ResponseWriter, r *http.Request) {
-	// Парсинг запроса
 	var req GetPriceRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
-		log.Printf("Ошибочное тело запроса: %v", err)
 		http.Error(w, `{"error": "Invalid request body"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Валидация
 	if err := h.validate.Struct(req); err != nil {
-		log.Printf("Ошибка валидации: %v", err)
 		http.Error(w, `{"error": "`+err.Error()+`"}`, http.StatusBadRequest)
 		return
 	}
 
-	// Поиск ближайшей цены
-	var price models.Price
-	query := h.db.Where("symbol = ?", req.Symbol)
-
-	// Сначала пробуем найти точное совпадение
-	exactQuery := query.Where("timestamp = ?", req.Timestamp)
-	if err := exactQuery.First(&price).Error; err == nil {
-		response := PriceResponse{
-			Symbol: req.Symbol,
-			Price:  price.Price,
-		}
-
-		w.Header().Set("Content-Type", "application/json")
-		json.NewEncoder(w).Encode(response)
+	// Получаем соединение с БД
+	db, err := h.db.DB()
+	if err != nil {
+		log.Printf("Failed to get DB connection: %v", err)
+		http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
 		return
 	}
 
-	// Если точного совпадения нет, ищем ближайшее
-	var beforePrice, afterPrice models.Price
-
-	// Ближайшее до запрошенного времени
-	query.Where("timestamp <= ?", req.Timestamp).
-		Order("timestamp DESC").
-		First(&beforePrice)
-
-	// Ближайшее после запрошенного времени
-	query.Where("timestamp >= ?", req.Timestamp).
-		Order("timestamp ASC").
-		First(&afterPrice)
-
-	// Выбираем ближайшее по времени значение
-	var result models.Price
-	switch {
-	case beforePrice.ID == 0 && afterPrice.ID == 0:
-		http.Error(w, `{"error": "No price data available"}`, http.StatusNotFound)
-		return
-	case beforePrice.ID == 0:
-		result = afterPrice
-	case afterPrice.ID == 0:
-		result = beforePrice
-	default:
-		beforeDiff := req.Timestamp.Sub(beforePrice.Timestamp)
-		afterDiff := afterPrice.Timestamp.Sub(req.Timestamp)
-		if beforeDiff < afterDiff {
-			result = beforePrice
+	// 1. Проверяем существование валюты
+	var currencyID uint
+	err = db.QueryRow("SELECT id FROM currencies WHERE symbol = $1 AND deleted_at IS NULL", req.Symbol).Scan(&currencyID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			http.Error(w, `{"error": "Currency not found"}`, http.StatusNotFound)
 		} else {
-			result = afterPrice
+			log.Printf("Currency lookup error: %v", err)
+			http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
+		}
+		return
+	}
+
+	utcTime := req.Timestamp.UTC()
+
+	// 2. Пытаемся найти точное совпадение (±1 секунда)
+	var exactPrice float64
+	var exactTimestamp time.Time
+	err = db.QueryRow(`
+        SELECT price, timestamp 
+        FROM prices 
+        WHERE currency_id = $1 
+        AND timestamp BETWEEN $2 AND $3
+        LIMIT 1`,
+		currencyID,
+		utcTime.Add(-time.Second),
+		utcTime.Add(time.Second),
+	).Scan(&exactPrice, &exactTimestamp)
+
+	if err == nil {
+		jsonResponse(w, PriceResponse{Symbol: req.Symbol, Price: exactPrice})
+		return
+	} else if err != sql.ErrNoRows {
+		log.Printf("Exact price query error: %v", err)
+		http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Ищем ближайшие цены
+	var beforePrice, afterPrice float64
+	var beforeTimestamp, afterTimestamp time.Time
+
+	// Ближайшая цена до
+	err = db.QueryRow(`
+        SELECT price, timestamp 
+        FROM prices 
+        WHERE currency_id = $1 
+        AND timestamp <= $2
+        ORDER BY timestamp DESC
+        LIMIT 1`,
+		currencyID,
+		utcTime,
+	).Scan(&beforePrice, &beforeTimestamp)
+
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("Before price query error: %v", err)
+		http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// Ближайшая цена после
+	err = db.QueryRow(`
+        SELECT price, timestamp 
+        FROM prices 
+        WHERE currency_id = $1 
+        AND timestamp >= $2
+        ORDER BY timestamp ASC
+        LIMIT 1`,
+		currencyID,
+		utcTime,
+	).Scan(&afterPrice, &afterTimestamp)
+
+	if err != nil && err != sql.ErrNoRows {
+		log.Printf("After price query error: %v", err)
+		http.Error(w, `{"error": "Database error"}`, http.StatusInternalServerError)
+		return
+	}
+
+	// 4. Выбираем результат
+	switch {
+	case beforeTimestamp.IsZero() && afterTimestamp.IsZero():
+		http.Error(w, `{"error": "No price data available for `+req.Symbol+`"}`, http.StatusNotFound)
+	case beforeTimestamp.IsZero():
+		jsonResponse(w, PriceResponse{Symbol: req.Symbol, Price: afterPrice})
+	case afterTimestamp.IsZero():
+		jsonResponse(w, PriceResponse{Symbol: req.Symbol, Price: beforePrice})
+	default:
+		beforeDiff := utcTime.Sub(beforeTimestamp)
+		afterDiff := afterTimestamp.Sub(utcTime)
+		if beforeDiff < afterDiff {
+			jsonResponse(w, PriceResponse{Symbol: req.Symbol, Price: beforePrice})
+		} else {
+			jsonResponse(w, PriceResponse{Symbol: req.Symbol, Price: afterPrice})
 		}
 	}
+}
 
-	response := PriceResponse{
-		Symbol: req.Symbol,
-		Price:  result.Price,
-	}
-
+func jsonResponse(w http.ResponseWriter, data interface{}) {
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(response)
+	if err := json.NewEncoder(w).Encode(data); err != nil {
+		log.Printf("Error encoding response: %v", err)
+	}
 }

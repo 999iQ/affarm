@@ -24,7 +24,7 @@ type RemoveCurrencyRequest struct {
 // @Failure 400 {object} map[string]string
 // @Failure 404 {object} map[string]string
 // @Failure 500 {object} map[string]string
-// @Router /currency/remove [delete]
+// @Router /currency/remove [post]
 func (h *CurrencyHandler) RemoveCurrency(w http.ResponseWriter, r *http.Request) {
 	// Парсинг запроса
 	var req RemoveCurrencyRequest

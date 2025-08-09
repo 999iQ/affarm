@@ -1,7 +1,9 @@
 package handlers
 
 import (
+	_ "affarm/docs"
 	"affarm/internal/handlers/currency"
+	"github.com/swaggo/http-swagger"
 	"gorm.io/gorm"
 	"log"
 	"net/http"
@@ -16,10 +18,12 @@ func NewRouter(db *gorm.DB) *http.ServeMux {
 	mux.HandleFunc("POST /api/v1/currency/add", currencyHandler.AddCurrency)
 	mux.HandleFunc("POST /api/v1/currency/remove", currencyHandler.RemoveCurrency)
 	mux.HandleFunc("GET /api/v1/currency/price", currencyHandler.GetPriceAtTime)
+	mux.HandleFunc("GET /swagger/", httpSwagger.WrapHandler)
 
 	log.Print("POST /api/v1/currency/add")
 	log.Print("POST /api/v1/currency/remove")
 	log.Print("GET /api/v1/currency/{symbol}")
+	log.Print("GET API /swagger/")
 
 	// Статические файлы (опционально)
 	mux.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))

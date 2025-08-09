@@ -1,0 +1,21 @@
+{
+  "swagger": "2.0",
+  "info": {
+    "title": "Currency API",
+    "description": "API для работы с курсами валют",
+    "version": "1.0",
+    "contact": {
+      "name": "999iQ",
+      "url": "https://t.me/sololvlup99",
+      "email": "romanstin001@gmail.com"
+    }
+  },
+  "host": "localhost:8080",
+  "basePath": "/api/v1",
+  "tags": [
+    {
+      "name": "Currencies",
+      "description": "Отслеживание цен на крипту"
+    }
+  ]
+}

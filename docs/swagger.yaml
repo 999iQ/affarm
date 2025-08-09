@@ -1,0 +1,162 @@
+definitions:
+  affarm_internal_models.Currency:
+    description: Currency entity
+    properties:
+      symbol:
+        type: string
+    type: object
+  internal_handlers_currency.AddCurrencyRequest:
+    properties:
+      symbol:
+        maxLength: 10
+        type: string
+    required:
+    - symbol
+    type: object
+  internal_handlers_currency.GetPriceRequest:
+    properties:
+      symbol:
+        maxLength: 10
+        type: string
+      timestamp:
+        type: string
+    required:
+    - symbol
+    - timestamp
+    type: object
+  internal_handlers_currency.PriceResponse:
+    properties:
+      price:
+        type: number
+      symbol:
+        type: string
+    type: object
+  internal_handlers_currency.RemoveCurrencyRequest:
+    properties:
+      id:
+        type: integer
+      symbol:
+        maxLength: 10
+        type: string
+    type: object
+info:
+  contact: {}
+paths:
+  /currency/add:
+    post:
+      consumes:
+      - application/json
+      description: Добавляет новую криптовалюту в систему отслеживания
+      parameters:
+      - description: Данные валюты
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers_currency.AddCurrencyRequest'
+      produces:
+      - application/json
+      responses:
+        "201":
+          description: Created
+          schema:
+            $ref: '#/definitions/affarm_internal_models.Currency'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Добавить новую криптовалюту
+      tags:
+      - currencies
+  /currency/remove:
+    post:
+      consumes:
+      - application/json
+      description: Удаляет криптовалюту из системы по ID или Symbol
+      parameters:
+      - description: Параметры удаления
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers_currency.RemoveCurrencyRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Удалить криптовалюту
+      tags:
+      - currencies
+  /price/get:
+    get:
+      consumes:
+      - application/json
+      description: Возвращает цену для указанной валютной пары на заданный момент
+        времени. Если точное значение отсутствует, возвращает ближайшее доступное.
+      parameters:
+      - description: Параметры запроса
+        in: body
+        name: request
+        required: true
+        schema:
+          $ref: '#/definitions/internal_handlers_currency.GetPriceRequest'
+      produces:
+      - application/json
+      responses:
+        "200":
+          description: OK
+          schema:
+            $ref: '#/definitions/internal_handlers_currency.PriceResponse'
+        "400":
+          description: Bad Request
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "404":
+          description: Not Found
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+        "500":
+          description: Internal Server Error
+          schema:
+            additionalProperties:
+              type: string
+            type: object
+      summary: Получить цену на момент времени
+      tags:
+      - prices
+swagger: "2.0"
